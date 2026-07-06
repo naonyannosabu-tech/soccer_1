@@ -158,12 +158,12 @@
    Firebaseコンソール → プロジェクトの設定 → 全般 → マイアプリ → SDK構成
 */
 const firebaseConfig = {
-  apiKey: "AIzaSyAc3XUg1qPcUohFm0zb2a9WGLTS7R1JF0Y",
-  authDomain: "soccer-d2630.firebaseapp.com",
-  projectId: "soccer-d2630",
-  storageBucket: "soccer-d2630.firebasestorage.app",
-  messagingSenderId: "253476847905",
-  appId: "1:253476847905:web:327a495bebe5db8f373e60"
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID"
 };
 
 firebase.initializeApp(firebaseConfig);
@@ -395,6 +395,21 @@ async function allocatePoint(playerId, statKey){
     skills: Array.from(newSkills)
   });
 }
+
+/* ---------- 4.5 選手の改名 ---------- */
+window.renamePlayer = function(playerId){
+  const player = State.players.find(p=>p.id===playerId);
+  if(!player) return;
+  const input = window.prompt('新しい選手名を入力してください（20文字以内）', player.name);
+  if(input === null) return; // キャンセル
+  const newName = input.trim();
+  if(!newName){ toast('名前を空にはできません','error'); return; }
+  if(newName.length > 20){ toast('名前は20文字以内にしてください','error'); return; }
+  db.collection('users').doc(State.user.uid).collection('players').doc(playerId)
+    .update({ name: newName })
+    .then(()=> toast(`「${newName}」に改名しました`))
+    .catch(e=> toast(e.message, 'error'));
+};
 
 /* ---------- 5. 覚醒 ---------- */
 async function awaken(playerId, materialIds){
@@ -691,7 +706,10 @@ function playerCard(p, opts={}){
   <div class="card p-4" data-player="${p.id}">
     <div class="flex justify-between items-start">
       <div>
-        <div class="font-black text-lg rarity-${p.rarity.replace('star','')}">${p.name}</div>
+        <div class="flex items-center gap-2">
+          <span class="font-black text-lg rarity-${p.rarity.replace('star','')}">${p.name}</span>
+          <button class="btn btn-ghost px-2 py-0 text-xs" onclick="renamePlayer('${p.id}')" title="選手名を変更">✎ 改名</button>
+        </div>
         <div class="text-xs" style="color:var(--muted)">${rarityLabel} ・ Lv.${p.level} ・ 覚醒${p.awaken||0} ・ 伸び代${p.potential}</div>
       </div>
       ${p.pendingPoints>0 ? `<span class="badge" style="background:var(--gold);color:#241300;">+${p.pendingPoints}pt</span>`:''}
