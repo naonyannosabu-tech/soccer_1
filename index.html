@@ -1,0 +1,1013 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ARMA CUP ― 天ぷらポイント争奪サッカー大会</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700;900&family=JetBrains+Mono:wght@400;600;800&display=swap" rel="stylesheet">
+
+<!-- Firebase (compat SDK: 1枚のHTMLで完結させるため) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+<style>
+  :root{
+    --bg:#0B1420;
+    --surface:#121D2E;
+    --surface2:#182741;
+    --border:#24344F;
+    --text:#E7EDF5;
+    --muted:#8CA0BD;
+    --gold:#E8A33D;
+    --green:#2F8F49;
+    --crimson:#D6455B;
+  }
+  *{box-sizing:border-box;}
+  body{
+    background:
+      radial-gradient(ellipse at top, #16233a 0%, var(--bg) 55%),
+      var(--bg);
+    color:var(--text);
+    font-family:'Zen Kaku Gothic New', sans-serif;
+    min-height:100vh;
+  }
+  .mono{font-family:'JetBrains Mono', monospace;}
+  ::-webkit-scrollbar{width:8px;height:8px;}
+  ::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px;}
+
+  .card{
+    background:linear-gradient(180deg, var(--surface2), var(--surface));
+    border:1px solid var(--border);
+    border-radius:14px;
+  }
+  .btn{
+    font-family:'Zen Kaku Gothic New', sans-serif;
+    font-weight:700;
+    border-radius:10px;
+    padding:.55rem 1.1rem;
+    transition:transform .12s ease, filter .12s ease;
+    border:1px solid transparent;
+  }
+  .btn:active{transform:scale(.97);}
+  .btn-gold{background:var(--gold);color:#241300;}
+  .btn-gold:hover{filter:brightness(1.1);}
+  .btn-green{background:var(--green);color:#eafff0;}
+  .btn-green:hover{filter:brightness(1.15);}
+  .btn-crimson{background:var(--crimson);color:#fff0f3;}
+  .btn-crimson:hover{filter:brightness(1.15);}
+  .btn-ghost{background:transparent;border:1px solid var(--border);color:var(--text);}
+  .btn-ghost:hover{background:var(--surface2);}
+  .btn:disabled{opacity:.4;cursor:not-allowed;transform:none;}
+
+  .tab-btn{
+    padding:.6rem 1rem;border-radius:10px 10px 0 0;font-weight:700;color:var(--muted);
+    border-bottom:3px solid transparent;white-space:nowrap;
+  }
+  .tab-btn.active{color:var(--gold);border-bottom:3px solid var(--gold);background:var(--surface);}
+
+  input, select{
+    background:#0d1626;border:1px solid var(--border);color:var(--text);
+    border-radius:8px;padding:.5rem .7rem;width:100%;
+  }
+  input:focus, select:focus{outline:2px solid var(--gold);}
+  label{font-size:.78rem;color:var(--muted);}
+
+  .rarity-5{color:var(--gold);}
+  .rarity-4{color:#c9a4ff;}
+  .rarity-3{color:#7fd1ff;}
+  .rarity-2{color:var(--muted);}
+
+  .stat-bar-track{background:#0d1626;border-radius:5px;overflow:hidden;height:8px;border:1px solid var(--border);}
+  .stat-bar-fill{height:100%;background:linear-gradient(90deg, var(--gold), #ffd27a);}
+
+  /* 電光掲示板 */
+  .scoreboard{
+    background:#050b13;
+    border:2px solid var(--border);
+    border-radius:16px;
+    box-shadow:inset 0 0 40px rgba(232,163,61,.06);
+  }
+  .score-digit{
+    font-family:'JetBrains Mono', monospace;
+    font-weight:800;
+    font-size:3rem;
+    color:#ffd27a;
+    text-shadow:0 0 12px rgba(255,210,122,.55);
+    letter-spacing:2px;
+  }
+  .live-dot{
+    width:9px;height:9px;border-radius:999px;background:var(--crimson);
+    box-shadow:0 0 8px var(--crimson);
+    animation:pulse 1.1s infinite;
+  }
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.25;}}
+  .ticker-line{
+    border-left:3px solid var(--gold);
+    padding:.35rem .7rem;
+    animation:fadeIn .35s ease;
+    font-size:.92rem;
+  }
+  @keyframes fadeIn{from{opacity:0;transform:translateY(-4px);}to{opacity:1;transform:translateY(0);}}
+
+  .toast{
+    position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
+    background:var(--surface2);border:1px solid var(--gold);color:var(--text);
+    padding:.7rem 1.2rem;border-radius:10px;z-index:100;box-shadow:0 6px 24px rgba(0,0,0,.4);
+    animation:fadeIn .25s ease;
+  }
+  .hidden{display:none !important;}
+  .badge{
+    display:inline-block;font-size:.7rem;font-weight:700;padding:.15rem .5rem;border-radius:999px;
+  }
+</style>
+</head>
+<body>
+
+<div id="app" class="max-w-5xl mx-auto px-4 pb-24">
+
+  <!-- ヘッダー -->
+  <header class="flex items-center justify-between py-5">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-full flex items-center justify-center" style="background:var(--gold);color:#241300;font-weight:900;">A</div>
+      <div>
+        <h1 class="text-xl font-black tracking-wide">ARMA CUP</h1>
+        <p class="text-xs" style="color:var(--muted)">天ぷらポイント争奪 5分間実況サッカー</p>
+      </div>
+    </div>
+    <div id="header-user" class="text-right text-sm"></div>
+  </header>
+
+  <!-- タブ -->
+  <nav id="tab-nav" class="flex gap-1 border-b overflow-x-auto" style="border-color:var(--border)"></nav>
+
+  <main id="tab-content" class="pt-6"></main>
+</div>
+
+<div id="toast-root"></div>
+
+<script>
+/* =========================================================
+   ARMA CUP — Firebase 連携ロジック
+   ========================================================= */
+
+/* ---------- 0. Firebase 初期化 ----------
+   ★★★ ここに自分の Firebase プロジェクトの config を入れてください ★★★
+   Firebaseコンソール → プロジェクトの設定 → 全般 → マイアプリ → SDK構成
+*/
+const firebaseConfig = {
+  apiKey: "AIzaSyAc3XUg1qPcUohFm0zb2a9WGLTS7R1JF0Y",
+  authDomain: "soccer-d2630.firebaseapp.com",
+  projectId: "soccer-d2630",
+  storageBucket: "soccer-d2630.firebasestorage.app",
+  messagingSenderId: "253476847905",
+  appId: "1:253476847905:web:327a495bebe5db8f373e60"
+};
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+const FieldValue = firebase.firestore.FieldValue;
+
+/* ---------- 1. グローバル状態 ---------- */
+const State = {
+  user: null,        // firebase auth user
+  userData: null,    // users/{uid} ドキュメント
+  players: [],        // users/{uid}/players
+  settings: null,      // system_settings/gacha
+  tournaments: [],
+  matches: [],
+  activeTab: 'login',
+  unsub: {}           // onSnapshotのunsubscribe関数格納
+};
+
+const DEFAULT_RATES = { star5:5, star4:15, star3:45, star2:25, item:10, itemTrainingRatio:0.6 };
+const RARITY_RANGE = { star5:[70,90], star4:[50,69], star3:[30,49], star2:[10,29] };
+const RARITY_LABEL = { star5:'★5 レジェンド', star4:'★4 エース', star3:'★3 レギュラー', star2:'★2 育成枠' };
+const SKILLS = {
+  shoot:  { name:'弾丸シュート', stat:'shoot' },
+  pass:   { name:'精密キラーパス', stat:'pass' },
+  defense:{ name:'剃刀タックル', stat:'defense' },
+  save:   { name:'神の手', stat:'save' }
+};
+const POS_STAT = { FW:'shoot', MF:'pass', DF:'defense', GK:'save' };
+const SURNAMES = ["風間","黒鉄","朝霧","獅子堂","雷神","氷室","炎条","蒼焔","天城","鬼灯","月影","獄門","翠嵐","無双","猛虎","紅蓮","朔夜","白銀","飛竜","八重樫"];
+const GIVEN = ["蓮","颯","翔","雅","豪","陣","楓","烈","舞","燐","刃","蒼","雷","獅","凰","嵐","翔真","雫","昴","隼"];
+
+function toast(msg, kind){
+  const el = document.createElement('div');
+  el.className = 'toast';
+  if(kind==='error') el.style.borderColor = 'var(--crimson)';
+  el.textContent = msg;
+  document.getElementById('toast-root').appendChild(el);
+  setTimeout(()=>el.remove(), 3200);
+}
+function randInt(min,max){ return Math.floor(Math.random()*(max-min+1))+min; }
+function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+function clamp(v,min,max){ return Math.max(min,Math.min(max,v)); }
+function expNeeded(level){ return 100 + level*50; }
+function pointsForLevelUp(potential){ return 2 + Math.floor(potential/10); }
+function materialsNeeded(awaken){ return awaken+1; }
+
+/* ---------- 2. 認証 ---------- */
+/* アカウント名でログインさせるため、内部的には
+   「アカウント名@armacup.local」という擬似メールアドレスに変換して
+   Firebase Authentication (メール/パスワード認証) を利用する。
+   ユーザーには一切メールアドレスを意識させない。 */
+function usernameToEmail(username){
+  const normalized = (username||'').trim().toLowerCase().replace(/[^a-z0-9_.-]/g,'');
+  return normalized ? `${normalized}@armacup.local` : '';
+}
+
+function signUp(username, pass){
+  const email = usernameToEmail(username);
+  if(!email) return Promise.reject(new Error('アカウント名は半角英数字・_-.のみ使用できます'));
+  return auth.createUserWithEmailAndPassword(email, pass).then(async cred=>{
+    await db.collection('users').doc(cred.user.uid).set({
+      username: username || email.split('@')[0],
+      tp: 1000,
+      items:{ training:0, camp:0 },
+      formation:{ FW:null, MF:null, DF:null, GK:null },
+      isAdmin:false,
+      createdAt: FieldValue.serverTimestamp()
+    });
+  });
+}
+function login(username, pass){
+  const email = usernameToEmail(username);
+  if(!email) return Promise.reject(new Error('アカウント名は半角英数字・_-.のみ使用できます'));
+  return auth.signInWithEmailAndPassword(email, pass);
+}
+function logout(){ return auth.signOut(); }
+
+auth.onAuthStateChanged(async user=>{
+  Object.values(State.unsub).forEach(fn=>fn && fn());
+  State.unsub = {};
+  State.user = user;
+  if(user){
+    listenUser(user.uid);
+    listenPlayers(user.uid);
+    listenSettings();
+    listenTournaments();
+    setActiveTab('mypage');
+  } else {
+    State.userData = null; State.players = []; State.settings = null;
+    State.tournaments = []; State.matches = [];
+    setActiveTab('login');
+  }
+  renderNav(); renderHeader(); renderTab();
+});
+
+function listenUser(uid){
+  State.unsub.user = db.collection('users').doc(uid).onSnapshot(snap=>{
+    State.userData = snap.exists ? { id:snap.id, ...snap.data() } : null;
+    renderHeader(); renderNav();
+    if(['mypage','gacha','formation','match','admin'].includes(State.activeTab)) renderTab();
+  });
+}
+function listenPlayers(uid){
+  State.unsub.players = db.collection('users').doc(uid).collection('players')
+    .orderBy('createdAt','desc').onSnapshot(snap=>{
+      State.players = snap.docs.map(d=>({ id:d.id, ...d.data() }));
+      if(['mypage','formation','admin'].includes(State.activeTab)) renderTab();
+    });
+}
+function listenSettings(){
+  State.unsub.settings = db.collection('system_settings').doc('gacha').onSnapshot(snap=>{
+    State.settings = snap.exists ? snap.data() : DEFAULT_RATES;
+    if(['gacha','admin'].includes(State.activeTab)) renderTab();
+  });
+}
+function listenTournaments(){
+  State.unsub.tournaments = db.collection('tournaments').orderBy('createdAt','desc')
+    .onSnapshot(snap=>{
+      State.tournaments = snap.docs.map(d=>({ id:d.id, ...d.data() }));
+      if(['match','admin'].includes(State.activeTab)) renderTab();
+    });
+  State.unsub.matches = db.collection('matches').orderBy('createdAt','desc')
+    .onSnapshot(snap=>{
+      State.matches = snap.docs.map(d=>({ id:d.id, ...d.data() }));
+      if(['match','admin'].includes(State.activeTab)) renderTab();
+    });
+}
+
+/* ---------- 3. ガチャ ---------- */
+function rollRarity(rates){
+  const r = rates || DEFAULT_RATES;
+  const total = (r.star5||0)+(r.star4||0)+(r.star3||0)+(r.star2||0)+(r.item||0);
+  let roll = Math.random()*total;
+  if((roll -= r.star5) < 0) return 'star5';
+  if((roll -= r.star4) < 0) return 'star4';
+  if((roll -= r.star3) < 0) return 'star3';
+  if((roll -= r.star2) < 0) return 'star2';
+  return 'item';
+}
+function makePlayer(rarity){
+  const [lo,hi] = RARITY_RANGE[rarity];
+  return {
+    name: pick(SURNAMES)+pick(GIVEN),
+    rarity,
+    level:0, exp:0, awaken:0,
+    potential: randInt(20,50),
+    pendingPoints:0,
+    stats:{
+      shoot: randInt(lo,hi),
+      pass: randInt(lo,hi),
+      defense: randInt(lo,hi),
+      save: randInt(lo,hi)
+    },
+    skills:[],
+    createdAt: FieldValue.serverTimestamp()
+  };
+}
+async function gachaPull(times){
+  const cost = times===10 ? 3000 : 300;
+  if(!State.userData || State.userData.tp < cost){ toast('TPが足りません','error'); return; }
+  const rates = State.settings || DEFAULT_RATES;
+  const results = [];
+  for(let i=0;i<times;i++){
+    const rarity = rollRarity(rates);
+    if(rarity === 'item'){
+      const isTraining = Math.random() < (rates.itemTrainingRatio ?? 0.6);
+      results.push({ type:'item', item: isTraining?'training':'camp' });
+    } else {
+      results.push({ type:'player', player: makePlayer(rarity) });
+    }
+  }
+  const uid = State.user.uid;
+  const batch = db.batch();
+  const userRef = db.collection('users').doc(uid);
+  let trainingGain=0, campGain=0;
+  results.forEach(r=>{
+    if(r.type==='item'){
+      if(r.item==='training') trainingGain++; else campGain++;
+    } else {
+      const ref = userRef.collection('players').doc();
+      batch.set(ref, r.player);
+    }
+  });
+  batch.update(userRef, {
+    tp: FieldValue.increment(-cost),
+    'items.training': FieldValue.increment(trainingGain),
+    'items.camp': FieldValue.increment(campGain)
+  });
+  await batch.commit();
+  renderGachaResult(results);
+}
+
+/* ---------- 4. 育成（EXP・レベルアップ・ポイント振り分け） ---------- */
+async function useItem(playerId, itemType){
+  const uid = State.user.uid;
+  const owned = State.userData.items?.[itemType] || 0;
+  if(owned <= 0){ toast('アイテムがありません','error'); return; }
+  const player = State.players.find(p=>p.id===playerId);
+  if(!player) return;
+  const gainExp = itemType==='training' ? 50 : 200;
+  let { level, exp, potential, pendingPoints } = player;
+  exp += gainExp;
+  let gainedPoints = 0;
+  while(exp >= expNeeded(level)){
+    exp -= expNeeded(level);
+    level += 1;
+    gainedPoints += pointsForLevelUp(potential);
+  }
+  pendingPoints = (pendingPoints||0) + gainedPoints;
+  const batch = db.batch();
+  const userRef = db.collection('users').doc(uid);
+  batch.update(userRef, { [`items.${itemType}`]: FieldValue.increment(-1) });
+  batch.update(userRef.collection('players').doc(playerId), { level, exp, pendingPoints });
+  await batch.commit();
+  if(gainedPoints>0) toast(`${player.name} レベルアップ！ +${gainedPoints}ポイント獲得`);
+  else toast(`${player.name} に経験値+${gainExp}`);
+}
+
+async function allocatePoint(playerId, statKey){
+  const player = State.players.find(p=>p.id===playerId);
+  if(!player || (player.pendingPoints||0) <= 0) return;
+  const newVal = (player.stats[statKey]||0) + 1;
+  const newSkills = new Set(player.skills||[]);
+  if(newVal >= 50) newSkills.add(statKey);
+  await db.collection('users').doc(State.user.uid).collection('players').doc(playerId).update({
+    [`stats.${statKey}`]: newVal,
+    pendingPoints: FieldValue.increment(-1),
+    skills: Array.from(newSkills)
+  });
+}
+
+/* ---------- 5. 覚醒 ---------- */
+async function awaken(playerId, materialIds){
+  const player = State.players.find(p=>p.id===playerId);
+  if(!player) return;
+  const need = materialsNeeded(player.awaken||0);
+  if(materialIds.length !== need){ toast(`素材が${need}体必要です`,'error'); return; }
+  const materials = materialIds.map(id=>State.players.find(p=>p.id===id));
+  if(materials.some(m=>!m || m.rarity !== player.rarity || m.id===playerId)){
+    toast('同じレア度の別選手を選んでください','error'); return;
+  }
+  const uid = State.user.uid;
+  const batch = db.batch();
+  const pRef = db.collection('users').doc(uid).collection('players').doc(playerId);
+  const newStats = {};
+  Object.keys(player.stats).forEach(k=> newStats[k] = player.stats[k] + 10);
+  batch.update(pRef, { awaken: FieldValue.increment(1), stats:newStats });
+  materialIds.forEach(id=>{
+    batch.delete(db.collection('users').doc(uid).collection('players').doc(id));
+  });
+  await batch.commit();
+  toast(`${player.name} が覚醒！ 全ステータス+10`);
+}
+
+/* ---------- 6. 編成 ---------- */
+async function setFormationSlot(pos, playerId){
+  await db.collection('users').doc(State.user.uid).update({ [`formation.${pos}`]: playerId || null });
+}
+
+/* ---------- 7. 実況コメント生成 ---------- */
+function commentaryFor(pos, name, statKey, isSkill){
+  const templates = {
+    shoot: isSkill ? [`[FW]${name}の『弾丸シュート』炸裂！`] : [`[FW]${name}がシュートを狙う！`],
+    pass:  isSkill ? [`[MF]${name}の『精密キラーパス』が通る！`] : [`[MF]${name}がパスをつなぐ`],
+    defense:isSkill ? [`[DF]${name}の『剃刀タックル』でボールを刈り取る！`] : [`[DF]${name}が体を寄せてブロック`],
+    save:  isSkill ? [`[GK]${name}が『神の手』でスーパーセーブ！！`] : [`[GK]${name}がキャッチ`]
+  };
+  return pick(templates[statKey]);
+}
+
+function simulateTick(teamA, teamB, scoreA, scoreB){
+  // どちらが攻めるか（MFのパス力で重み付け）
+  const wA = (teamA.MF?.stats.pass||10) + 20;
+  const wB = (teamB.MF?.stats.pass||10) + 20;
+  const attackingIsA = Math.random() * (wA+wB) < wA;
+  const atk = attackingIsA ? teamA : teamB;
+  const def = attackingIsA ? teamB : teamA;
+  const logs = [];
+  if(atk.MF){
+    const mfSkill = (atk.MF.skills||[]).includes('pass');
+    logs.push(commentaryFor('MF', atk.MF.name, 'pass', mfSkill));
+  }
+  let goal = false;
+  if(atk.FW){
+    const fwSkill = (atk.FW.skills||[]).includes('shoot');
+    logs.push(commentaryFor('FW', atk.FW.name, 'shoot', fwSkill));
+    const shootPower = atk.FW.stats.shoot - (def.DF?.stats.defense||0)*0.3;
+    const savePower = def.GK?.stats.save || 10;
+    const goalChance = clamp(0.30 + (shootPower - savePower)/200, 0.05, 0.85);
+    if(Math.random() < goalChance){
+      goal = true;
+      logs.push(`⚽ ゴォォール！！ ${atk.FW.name}が決めた！`);
+    } else if(def.GK){
+      const gkSkill = (def.GK.skills||[]).includes('save');
+      logs.push(commentaryFor('GK', def.GK.name, 'save', gkSkill));
+    } else if(def.DF){
+      logs.push(commentaryFor('DF', def.DF.name, 'defense', (def.DF.skills||[]).includes('defense')));
+    }
+  }
+  return { logs, scoreA: scoreA + (goal && attackingIsA?1:0), scoreB: scoreB + (goal && !attackingIsA?1:0) };
+}
+
+async function loadTeam(uid){
+  const userSnap = await db.collection('users').doc(uid).get();
+  const form = userSnap.data()?.formation || {};
+  const team = {};
+  for(const pos of ['FW','MF','DF','GK']){
+    if(form[pos]){
+      const pSnap = await db.collection('users').doc(uid).collection('players').doc(form[pos]).get();
+      team[pos] = pSnap.exists ? { id:pSnap.id, ...pSnap.data() } : null;
+    }
+  }
+  return team;
+}
+
+let matchTimer = null;
+async function startMatchSimulation(matchId){
+  const matchRef = db.collection('matches').doc(matchId);
+  const matchSnap = await matchRef.get();
+  const m = matchSnap.data();
+  const teamA = await loadTeam(m.playerAUid);
+  const teamB = await loadTeam(m.playerBUid);
+  await matchRef.update({ status:'live', score:{a:0,b:0}, logs:[], startedAt: FieldValue.serverTimestamp() });
+  let scoreA=0, scoreB=0, elapsed=0;
+  const DURATION = 300; const TICK = 3.5;
+  if(matchTimer) clearInterval(matchTimer);
+  matchTimer = setInterval(async ()=>{
+    elapsed += TICK;
+    const { logs, scoreA:na, scoreB:nb } = simulateTick(teamA, teamB, scoreA, scoreB);
+    scoreA = na; scoreB = nb;
+    await matchRef.update({
+      score:{a:scoreA,b:scoreB},
+      logs: FieldValue.arrayUnion(...logs.map(t=>`[${Math.floor(elapsed)}s] ${t}`))
+    });
+    if(elapsed >= DURATION){
+      clearInterval(matchTimer);
+      await finishMatch(matchId, scoreA, scoreB);
+    }
+  }, TICK*1000);
+}
+
+async function finishMatch(matchId, scoreA, scoreB){
+  const matchRef = db.collection('matches').doc(matchId);
+  const winner = scoreA===scoreB ? 'draw' : (scoreA>scoreB ? 'A':'B');
+  await matchRef.update({ status:'finished', score:{a:scoreA,b:scoreB}, winner });
+  await payoutMatch(matchId, winner);
+}
+
+async function placeBet(matchId, side, amount){
+  amount = Number(amount);
+  if(!amount || amount<=0){ toast('賭け金を入力してください','error'); return; }
+  if(State.userData.tp < amount){ toast('TPが足りません','error'); return; }
+  const uid = State.user.uid;
+  const betRef = db.collection('matches').doc(matchId).collection('bets').doc(uid);
+  const existing = await betRef.get();
+  if(existing.exists){ toast('既にこの試合に賭けています','error'); return; }
+  await db.runTransaction(async tx=>{
+    tx.update(db.collection('users').doc(uid), { tp: FieldValue.increment(-amount) });
+    tx.set(betRef, { uid, side, amount, createdAt: FieldValue.serverTimestamp() });
+  });
+  toast('賭けを受け付けました');
+}
+
+async function payoutMatch(matchId, winner){
+  const betsSnap = await db.collection('matches').doc(matchId).collection('bets').get();
+  const bets = betsSnap.docs.map(d=>d.data());
+  if(winner==='draw'){
+    // 引き分けは全額返却
+    const batch = db.batch();
+    bets.forEach(b=> batch.update(db.collection('users').doc(b.uid), { tp: FieldValue.increment(b.amount) }));
+    await batch.commit();
+    return;
+  }
+  const winners = bets.filter(b=>b.side===winner);
+  const losers = bets.filter(b=>b.side!==winner);
+  const winPool = winners.reduce((s,b)=>s+b.amount,0);
+  const losePool = losers.reduce((s,b)=>s+b.amount,0);
+  const batch = db.batch();
+  winners.forEach(b=>{
+    const share = winPool>0 ? (b.amount/winPool)*losePool : 0;
+    const payout = b.amount + share; // 元本 + 配当
+    batch.update(db.collection('users').doc(b.uid), { tp: FieldValue.increment(Math.round(payout)) });
+  });
+  await batch.commit();
+}
+
+/* ---------- 8. 管理者機能 ---------- */
+async function createTournament(name){
+  await db.collection('tournaments').add({ name, createdAt: FieldValue.serverTimestamp() });
+}
+async function createMatch(tournamentId, uidA, uidB){
+  const [snapA, snapB] = await Promise.all([
+    db.collection('users').doc(uidA).get(), db.collection('users').doc(uidB).get()
+  ]);
+  await db.collection('matches').add({
+    tournamentId,
+    playerAUid: uidA, playerBUid: uidB,
+    playerAName: snapA.data()?.username || 'Player A',
+    playerBName: snapB.data()?.username || 'Player B',
+    status:'betting', score:{a:0,b:0}, logs:[],
+    createdAt: FieldValue.serverTimestamp()
+  });
+}
+async function setMatchStatus(matchId, status){
+  await db.collection('matches').doc(matchId).update({ status });
+}
+async function updateGachaRates(rates){
+  await db.collection('system_settings').doc('gacha').set(rates, { merge:true });
+  toast('確率設定を更新しました');
+}
+async function grantTP(targetUid, amount){
+  amount = Number(amount);
+  if(!amount) return;
+  if(targetUid === 'ALL'){
+    const snap = await db.collection('users').get();
+    const batch = db.batch();
+    snap.docs.forEach(d=> batch.update(d.ref, { tp: FieldValue.increment(amount) }));
+    await batch.commit();
+    toast(`全ユーザーにTP ${amount} を配布しました`);
+  } else {
+    await db.collection('users').doc(targetUid).update({ tp: FieldValue.increment(amount) });
+    toast('TPを付与しました');
+  }
+}
+
+/* =========================================================
+   9. レンダリング（画面描画）
+   ========================================================= */
+const TABS = [
+  { key:'login', label:'ログイン', auth:false },
+  { key:'mypage', label:'マイページ', auth:true },
+  { key:'gacha', label:'ガチャ', auth:true },
+  { key:'formation', label:'編成', auth:true },
+  { key:'match', label:'試合', auth:true },
+  { key:'admin', label:'管理者', auth:true, adminOnly:true }
+];
+
+function setActiveTab(key){ State.activeTab = key; renderNav(); renderTab(); }
+
+function renderNav(){
+  const nav = document.getElementById('tab-nav');
+  const isAdmin = !!State.userData?.isAdmin;
+  nav.innerHTML = TABS
+    .filter(t => (t.auth ? !!State.user : !State.user))
+    .filter(t => !t.adminOnly || isAdmin)
+    .map(t => `<button class="tab-btn ${State.activeTab===t.key?'active':''}" data-tab="${t.key}">${t.label}</button>`)
+    .join('');
+  nav.querySelectorAll('button').forEach(b=>{
+    b.onclick = ()=> setActiveTab(b.dataset.tab);
+  });
+}
+
+function renderHeader(){
+  const el = document.getElementById('header-user');
+  if(!State.user || !State.userData){ el.innerHTML=''; return; }
+  el.innerHTML = `
+    <div class="flex items-center gap-3 justify-end">
+      <div>
+        <div class="font-bold">${State.userData.username}</div>
+        <div class="mono text-xs" style="color:var(--gold)">TP ${State.userData.tp?.toLocaleString?.() ?? State.userData.tp}</div>
+      </div>
+      <button id="logout-btn" class="btn btn-ghost text-xs">ログアウト</button>
+    </div>`;
+  document.getElementById('logout-btn').onclick = logout;
+}
+
+function renderTab(){
+  const root = document.getElementById('tab-content');
+  switch(State.activeTab){
+    case 'login': root.innerHTML = viewLogin(); bindLogin(); break;
+    case 'mypage': root.innerHTML = viewMyPage(); bindMyPage(); break;
+    case 'gacha': root.innerHTML = viewGacha(); bindGacha(); break;
+    case 'formation': root.innerHTML = viewFormation(); bindFormation(); break;
+    case 'match': root.innerHTML = viewMatch(); bindMatch(); break;
+    case 'admin': root.innerHTML = viewAdmin(); bindAdmin(); break;
+    default: root.innerHTML='';
+  }
+}
+
+/* ---- ログイン画面（アカウント名＋パスワード） ---- */
+function viewLogin(){
+  return `
+  <div class="max-w-md mx-auto card p-6">
+    <div class="flex gap-2 mb-4">
+      <button id="mode-login" class="btn btn-gold flex-1">ログイン</button>
+      <button id="mode-signup" class="btn btn-ghost flex-1">新規登録</button>
+    </div>
+    <div class="mb-3"><label>アカウント名</label><input id="in-username" placeholder="半角英数字・_-. のみ" autocomplete="username"></div>
+    <div class="mb-4"><label>パスワード</label><input id="in-pass" type="password" placeholder="6文字以上" autocomplete="current-password"></div>
+    <button id="submit-btn" class="btn btn-green w-full">ログイン</button>
+    <p class="text-xs mt-3" style="color:var(--muted)">初回登録時にTP1000が付与されます。</p>
+  </div>`;
+}
+function bindLogin(){
+  let mode = 'login';
+  const submitBtn = document.getElementById('submit-btn');
+  document.getElementById('mode-login').onclick = ()=>{
+    mode='login'; submitBtn.textContent='ログイン';
+    document.getElementById('mode-login').className='btn btn-gold flex-1';
+    document.getElementById('mode-signup').className='btn btn-ghost flex-1';
+  };
+  document.getElementById('mode-signup').onclick = ()=>{
+    mode='signup'; submitBtn.textContent='新規登録';
+    document.getElementById('mode-signup').className='btn btn-gold flex-1';
+    document.getElementById('mode-login').className='btn btn-ghost flex-1';
+  };
+  submitBtn.onclick = async ()=>{
+    const username = document.getElementById('in-username').value.trim();
+    const pass = document.getElementById('in-pass').value;
+    if(!username){ toast('アカウント名を入力してください','error'); return; }
+    try{
+      if(mode==='signup') await signUp(username, pass);
+      else await login(username, pass);
+    }catch(e){ toast(e.message, 'error'); }
+  };
+}
+
+/* ---- マイページ ---- */
+function playerCard(p, opts={}){
+  const rarityLabel = RARITY_LABEL[p.rarity];
+  const needed = expNeeded(p.level);
+  const pct = clamp((p.exp/needed)*100, 0, 100);
+  return `
+  <div class="card p-4" data-player="${p.id}">
+    <div class="flex justify-between items-start">
+      <div>
+        <div class="font-black text-lg rarity-${p.rarity.replace('star','')}">${p.name}</div>
+        <div class="text-xs" style="color:var(--muted)">${rarityLabel} ・ Lv.${p.level} ・ 覚醒${p.awaken||0} ・ 伸び代${p.potential}</div>
+      </div>
+      ${p.pendingPoints>0 ? `<span class="badge" style="background:var(--gold);color:#241300;">+${p.pendingPoints}pt</span>`:''}
+    </div>
+    <div class="mt-2 mb-2">
+      <div class="flex justify-between text-xs mono" style="color:var(--muted)"><span>EXP</span><span>${p.exp}/${needed}</span></div>
+      <div class="stat-bar-track"><div class="stat-bar-fill" style="width:${pct}%"></div></div>
+    </div>
+    <div class="grid grid-cols-2 gap-x-4 gap-y-1 text-sm mono mt-2">
+      ${['shoot','pass','defense','save'].map(k=>`
+        <div class="flex items-center justify-between">
+          <span>${{shoot:'シュート',pass:'パス',defense:'DF力',save:'セーブ'}[k]} ${ (p.skills||[]).includes(k) ? '<span style="color:var(--gold)">★'+SKILLS[k].name+'</span>' : ''}</span>
+          <span class="flex items-center gap-1">
+            ${p.stats[k]}
+            ${opts.allocate && p.pendingPoints>0 ? `<button class="btn btn-ghost px-2 py-0 text-xs" onclick="allocatePoint('${p.id}','${k}')">+1</button>` : ''}
+          </span>
+        </div>`).join('')}
+    </div>
+    ${opts.trainButtons ? `
+    <div class="flex gap-2 mt-3">
+      <button class="btn btn-ghost text-xs flex-1" onclick="useItem('${p.id}','training')">トレーニング札使用(+50EXP)</button>
+      <button class="btn btn-ghost text-xs flex-1" onclick="useItem('${p.id}','camp')">合宿札使用(+200EXP)</button>
+    </div>` : ''}
+    ${opts.awakenButton ? `<button class="btn btn-crimson text-xs w-full mt-2" onclick="openAwakenModal('${p.id}')">覚醒させる（素材${materialsNeeded(p.awaken||0)}体必要）</button>`:''}
+  </div>`;
+}
+
+function viewMyPage(){
+  if(!State.userData) return `<p>読み込み中...</p>`;
+  const items = State.userData.items || {training:0,camp:0};
+  return `
+  <div class="grid md:grid-cols-3 gap-4 mb-6">
+    <div class="card p-4"><div class="text-xs" style="color:var(--muted)">所持TP</div><div class="mono text-2xl font-bold" style="color:var(--gold)">${State.userData.tp}</div></div>
+    <div class="card p-4"><div class="text-xs" style="color:var(--muted)">トレーニング札</div><div class="mono text-2xl font-bold">${items.training||0}枚</div></div>
+    <div class="card p-4"><div class="text-xs" style="color:var(--muted)">合宿札</div><div class="mono text-2xl font-bold">${items.camp||0}枚</div></div>
+  </div>
+  <h2 class="font-black text-lg mb-3">所持選手 (${State.players.length})</h2>
+  <div id="awaken-modal-root"></div>
+  <div class="grid md:grid-cols-2 gap-4">
+    ${State.players.length ? State.players.map(p=>playerCard(p,{allocate:true,trainButtons:true,awakenButton:true})).join('') : `<p style="color:var(--muted)">選手がいません。ガチャで獲得しましょう。</p>`}
+  </div>`;
+}
+function bindMyPage(){}
+
+let awakenTarget = null;
+window.openAwakenModal = function(playerId){
+  awakenTarget = playerId;
+  const player = State.players.find(p=>p.id===playerId);
+  const candidates = State.players.filter(p=>p.rarity===player.rarity && p.id!==playerId);
+  const need = materialsNeeded(player.awaken||0);
+  const root = document.getElementById('awaken-modal-root');
+  root.innerHTML = `
+    <div class="card p-4 mb-4 border" style="border-color:var(--crimson)">
+      <div class="font-bold mb-2">覚醒：${player.name} （同じレア度の選手を${need}体選択）</div>
+      ${candidates.length===0 ? `<p style="color:var(--muted)">素材にできる同レア度の選手がいません。</p>` : `
+      <div class="flex flex-wrap gap-2 mb-3">
+        ${candidates.map(c=>`<label class="btn btn-ghost text-xs flex items-center gap-1">
+          <input type="checkbox" class="awaken-check" value="${c.id}"> ${c.name}(Lv.${c.level})
+        </label>`).join('')}
+      </div>
+      <button class="btn btn-crimson text-sm" id="awaken-confirm">覚醒実行</button>`}
+      <button class="btn btn-ghost text-sm ml-2" id="awaken-cancel">キャンセル</button>
+    </div>`;
+  root.querySelector('#awaken-cancel').onclick = ()=> root.innerHTML='';
+  const confirmBtn = root.querySelector('#awaken-confirm');
+  if(confirmBtn){
+    confirmBtn.onclick = ()=>{
+      const ids = Array.from(root.querySelectorAll('.awaken-check:checked')).map(el=>el.value);
+      awaken(playerId, ids).then(()=> root.innerHTML='');
+    };
+  }
+};
+
+/* ---- ガチャ画面 ---- */
+function viewGacha(){
+  const r = State.settings || DEFAULT_RATES;
+  return `
+  <div class="card p-6 mb-6 text-center">
+    <h2 class="font-black text-xl mb-1">育成ガチャ</h2>
+    <p class="text-sm mb-4" style="color:var(--muted)">★5 ${r.star5}% ／ ★4 ${r.star4}% ／ ★3 ${r.star3}% ／ ★2 ${r.star2}% ／ アイテム ${r.item}%</p>
+    <div class="flex gap-3 justify-center">
+      <button id="gacha-1" class="btn btn-gold">単発（300TP）</button>
+      <button id="gacha-10" class="btn btn-gold">10連（3000TP）</button>
+    </div>
+  </div>
+  <div id="gacha-result" class="grid md:grid-cols-2 gap-3"></div>`;
+}
+function bindGacha(){
+  document.getElementById('gacha-1').onclick = ()=> gachaPull(1);
+  document.getElementById('gacha-10').onclick = ()=> gachaPull(10);
+}
+function renderGachaResult(results){
+  const root = document.getElementById('gacha-result');
+  if(!root) return;
+  root.innerHTML = results.map(r=>{
+    if(r.type==='item'){
+      return `<div class="card p-4"><div class="font-bold" style="color:var(--green)">${r.item==='training'?'トレーニング札':'合宿札'}</div><div class="text-xs" style="color:var(--muted)">獲得</div></div>`;
+    }
+    const p = r.player;
+    return `<div class="card p-4">
+      <div class="font-black rarity-${p.rarity.replace('star','')}">${RARITY_LABEL[p.rarity]}</div>
+      <div class="font-bold text-lg">${p.name}</div>
+      <div class="text-xs mono" style="color:var(--muted)">シュ${p.stats.shoot} パ${p.stats.pass} DF${p.stats.defense} セ${p.stats.save} ／ 伸び代${p.potential}</div>
+    </div>`;
+  }).join('');
+}
+
+/* ---- 編成画面 ---- */
+function viewFormation(){
+  const form = State.userData?.formation || {};
+  const posLabel = {FW:'FW（シュート力）', MF:'MF（パス精度）', DF:'DF（ディフェンス力）', GK:'GK（セーブ力）'};
+  return `
+  <h2 class="font-black text-lg mb-4">チーム編成</h2>
+  <div class="grid md:grid-cols-2 gap-4">
+    ${['FW','MF','DF','GK'].map(pos=>{
+      const eligible = State.players; // 簡易化: 全選手から選択可（好きなポジションで起用可能）
+      return `
+      <div class="card p-4">
+        <label>${posLabel[pos]}</label>
+        <select data-pos="${pos}" class="formation-select mt-1">
+          <option value="">未選出</option>
+          ${eligible.map(p=>`<option value="${p.id}" ${form[pos]===p.id?'selected':''}>${p.name}（${RARITY_LABEL[p.rarity]} / ${POS_STAT[pos]}:${p.stats[POS_STAT[pos]]}）</option>`).join('')}
+        </select>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+function bindFormation(){
+  document.querySelectorAll('.formation-select').forEach(sel=>{
+    sel.onchange = ()=> setFormationSlot(sel.dataset.pos, sel.value);
+  });
+}
+
+/* ---- 試合画面 ---- */
+let liveMatchUnsub = null;
+function viewMatch(){
+  const grouped = {};
+  State.tournaments.forEach(t=> grouped[t.id] = { info:t, matches:[] });
+  State.matches.forEach(m=>{
+    if(!grouped[m.tournamentId]) grouped[m.tournamentId] = { info:{name:'（大会未設定）'}, matches:[] };
+    grouped[m.tournamentId].matches.push(m);
+  });
+  return `
+  <div id="live-match-root" class="mb-6"></div>
+  <h2 class="font-black text-lg mb-3">大会・対戦カード</h2>
+  <div class="space-y-6">
+  ${Object.values(grouped).map(g=>`
+    <div>
+      <h3 class="font-bold mb-2" style="color:var(--gold)">${g.info.name}</h3>
+      <div class="grid md:grid-cols-2 gap-3">
+      ${g.matches.map(m=>`
+        <div class="card p-4">
+          <div class="flex justify-between items-center mb-2">
+            <span class="font-bold">${m.playerAName} vs ${m.playerBName}</span>
+            <span class="badge" style="background:${m.status==='live'?'var(--crimson)':m.status==='finished'?'var(--border)':'var(--green)'}">${{betting:'賭け受付中',live:'試合中',finished:'終了'}[m.status]}</span>
+          </div>
+          <div class="mono text-sm mb-2">${m.score?.a ?? 0} - ${m.score?.b ?? 0}</div>
+          ${m.status==='betting' ? `
+            <div class="flex gap-2 items-center">
+              <input type="number" min="1" placeholder="TP" class="bet-amount w-20" data-match="${m.id}">
+              <button class="btn btn-green text-xs" data-bet="A" data-match="${m.id}">${m.playerAName}に賭ける</button>
+              <button class="btn btn-crimson text-xs" data-bet="B" data-match="${m.id}">${m.playerBName}に賭ける</button>
+            </div>` : ''}
+          ${m.status==='live' ? `<button class="btn btn-gold text-xs" data-watch="${m.id}">実況を見る</button>` : ''}
+          ${m.status==='finished' ? `<div class="text-xs" style="color:var(--muted)">勝者: ${m.winner==='draw'?'引き分け':(m.winner==='A'?m.playerAName:m.playerBName)}</div>`:''}
+        </div>`).join('')}
+      </div>
+    </div>`).join('') || `<p style="color:var(--muted)">開催中の大会はありません。</p>`}
+  </div>`;
+}
+function bindMatch(){
+  document.querySelectorAll('[data-bet]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const matchId = btn.dataset.match;
+      const amount = document.querySelector(`.bet-amount[data-match="${matchId}"]`).value;
+      placeBet(matchId, btn.dataset.bet, amount);
+    };
+  });
+  document.querySelectorAll('[data-watch]').forEach(btn=>{
+    btn.onclick = ()=> watchMatch(btn.dataset.watch);
+  });
+  // 自動的に進行中の試合があれば表示
+  const live = State.matches.find(m=>m.status==='live');
+  if(live) watchMatch(live.id);
+}
+function watchMatch(matchId){
+  if(liveMatchUnsub) liveMatchUnsub();
+  liveMatchUnsub = db.collection('matches').doc(matchId).onSnapshot(snap=>{
+    const m = { id:snap.id, ...snap.data() };
+    const root = document.getElementById('live-match-root');
+    if(!root) return;
+    root.innerHTML = `
+    <div class="scoreboard p-5">
+      <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center gap-2"><span class="live-dot"></span><span class="text-xs font-bold" style="color:var(--crimson)">LIVE</span></div>
+        <span class="text-xs mono" style="color:var(--muted)">${m.playerAName} vs ${m.playerBName}</span>
+      </div>
+      <div class="flex items-center justify-center gap-6 mb-4">
+        <span class="score-digit">${m.score?.a ?? 0}</span>
+        <span class="mono" style="color:var(--muted)">-</span>
+        <span class="score-digit">${m.score?.b ?? 0}</span>
+      </div>
+      <div class="max-h-52 overflow-y-auto space-y-1">
+        ${(m.logs||[]).slice(-30).reverse().map(l=>`<div class="ticker-line">${l}</div>`).join('')}
+      </div>
+    </div>`;
+  });
+}
+
+/* ---- 管理者画面 ---- */
+let allUsersCache = [];
+async function fetchAllUsers(){
+  const snap = await db.collection('users').get();
+  allUsersCache = snap.docs.map(d=>({ id:d.id, ...d.data() }));
+  return allUsersCache;
+}
+function viewAdmin(){
+  return `
+  <div class="grid lg:grid-cols-2 gap-6">
+    <div class="card p-5">
+      <h3 class="font-black mb-3">① 大会・対戦カード</h3>
+      <div class="flex gap-2 mb-3">
+        <input id="new-tournament-name" placeholder="大会名">
+        <button id="create-tournament-btn" class="btn btn-gold whitespace-nowrap">作成</button>
+      </div>
+      <div id="admin-tournament-list" class="text-sm mb-3 space-y-1"></div>
+      <hr class="my-3" style="border-color:var(--border)">
+      <div class="space-y-2">
+        <label>大会を選択</label>
+        <select id="match-tournament-select">${State.tournaments.map(t=>`<option value="${t.id}">${t.name}</option>`).join('')}</select>
+        <label>対戦者A</label>
+        <select id="match-uidA"></select>
+        <label>対戦者B</label>
+        <select id="match-uidB"></select>
+        <button id="create-match-btn" class="btn btn-green w-full mt-2">対戦カード作成</button>
+      </div>
+      <hr class="my-3" style="border-color:var(--border)">
+      <div id="admin-match-list" class="space-y-2 text-sm"></div>
+    </div>
+
+    <div class="space-y-6">
+      <div class="card p-5">
+        <h3 class="font-black mb-3">② ガチャ確率設定</h3>
+        <div id="rate-form" class="grid grid-cols-2 gap-3 text-sm"></div>
+        <button id="save-rates-btn" class="btn btn-gold w-full mt-3">保存</button>
+      </div>
+      <div class="card p-5">
+        <h3 class="font-black mb-3">③ TP配布</h3>
+        <label>対象ユーザー</label>
+        <select id="tp-target"><option value="ALL">全ユーザー</option></select>
+        <label class="block mt-2">付与TP</label>
+        <input id="tp-amount" type="number" placeholder="例: 500">
+        <button id="grant-tp-btn" class="btn btn-crimson w-full mt-3">配布実行</button>
+      </div>
+    </div>
+  </div>`;
+}
+async function bindAdmin(){
+  document.getElementById('create-tournament-btn').onclick = async ()=>{
+    const name = document.getElementById('new-tournament-name').value.trim();
+    if(!name) return;
+    await createTournament(name);
+    document.getElementById('new-tournament-name').value='';
+  };
+  document.getElementById('admin-tournament-list').innerHTML = State.tournaments.map(t=>`<div>・${t.name}</div>`).join('') || '<span style="color:var(--muted)">大会なし</span>';
+
+  const users = await fetchAllUsers();
+  const uidASel = document.getElementById('match-uidA');
+  const uidBSel = document.getElementById('match-uidB');
+  const tpTargetSel = document.getElementById('tp-target');
+  const opts = users.map(u=>`<option value="${u.id}">${u.username}</option>`).join('');
+  uidASel.innerHTML = opts; uidBSel.innerHTML = opts;
+  tpTargetSel.innerHTML += opts;
+
+  document.getElementById('create-match-btn').onclick = async ()=>{
+    const tId = document.getElementById('match-tournament-select').value;
+    const uidA = uidASel.value, uidB = uidBSel.value;
+    if(!tId){ toast('大会を作成してください','error'); return; }
+    if(uidA===uidB){ toast('異なるユーザーを選んでください','error'); return; }
+    await createMatch(tId, uidA, uidB);
+  };
+
+  document.getElementById('admin-match-list').innerHTML = State.matches.map(m=>`
+    <div class="card p-3 flex items-center justify-between">
+      <span>${m.playerAName} vs ${m.playerBName} <span class="badge" style="background:var(--border)">${m.status}</span></span>
+      <span class="flex gap-1">
+        <button class="btn btn-ghost text-xs" data-status="betting" data-id="${m.id}">賭け受付</button>
+        <button class="btn btn-green text-xs" data-start="${m.id}">試合開始</button>
+        <button class="btn btn-ghost text-xs" data-status="finished" data-id="${m.id}">強制終了</button>
+      </span>
+    </div>`).join('');
+  document.querySelectorAll('[data-status]').forEach(b=> b.onclick = ()=> setMatchStatus(b.dataset.id, b.dataset.status));
+  document.querySelectorAll('[data-start]').forEach(b=> b.onclick = ()=> startMatchSimulation(b.dataset.start));
+
+  const r = State.settings || DEFAULT_RATES;
+  document.getElementById('rate-form').innerHTML = ['star5','star4','star3','star2','item'].map(k=>`
+    <div><label>${k}</label><input type="number" id="rate-${k}" value="${r[k]}"></div>
+  `).join('') + `<div class="col-span-2"><label>アイテムの内、トレーニング札比率(0-1)</label><input type="number" step="0.05" id="rate-ratio" value="${r.itemTrainingRatio ?? 0.6}"></div>`;
+  document.getElementById('save-rates-btn').onclick = ()=>{
+    updateGachaRates({
+      star5:Number(document.getElementById('rate-star5').value),
+      star4:Number(document.getElementById('rate-star4').value),
+      star3:Number(document.getElementById('rate-star3').value),
+      star2:Number(document.getElementById('rate-star2').value),
+      item:Number(document.getElementById('rate-item').value),
+      itemTrainingRatio:Number(document.getElementById('rate-ratio').value)
+    });
+  };
+
+  document.getElementById('grant-tp-btn').onclick = ()=>{
+    grantTP(tpTargetSel.value, document.getElementById('tp-amount').value);
+  };
+}
+
+/* ---------- 初期描画 ---------- */
+renderNav(); renderHeader(); renderTab();
+</script>
+</body>
+</html>
